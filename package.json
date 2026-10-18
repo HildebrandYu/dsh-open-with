@@ -1,0 +1,49 @@
+{
+  "name": "dsh-open-with",
+  "version": "0.2.0",
+  "description": "DSH 專用的「副檔名 → 開啟 app」規則：只在 DSH 內開啟檔案時使用指定 app，不改 macOS 系統預設；附設定頁。",
+  "type": "module",
+  "main": "./plugin/index.mjs",
+  "exports": {
+    ".": {
+      "default": "./plugin/index.mjs"
+    },
+    "./client": {
+      "default": "./plugin/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "plugin",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "plugin",
+    "open-with",
+    "default-app",
+    "file-association",
+    "finder",
+    "macos"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HildebrandYu/dsh-open-with.git"
+  },
+  "homepage": "https://github.com/HildebrandYu/dsh-open-with#readme",
+  "license": "MIT",
+  "dependencies": {}
+}

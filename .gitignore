@@ -1,0 +1,7 @@
+# 依賴與雜物
+node_modules/
+.DS_Store
+*.log
+
+# 打包產物（release 用，不進 git）
+*.tgz

@@ -1,0 +1,6 @@
+# dsh bundle patch：從 npm／GitHub 安裝時，把本插件插入 profile 的層疊。
+# id 是載入器識別；name 是套件名，安裝後由 profile 的 node_modules 解析。
+# 本機以 file:// 直掛時走的是 ~/.dsh/cordis.patch.yml 那一列，不走這裡。
+- insert:
+    - id: open-with
+      name: 'dsh-open-with'
