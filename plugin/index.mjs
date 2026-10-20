@@ -102,10 +102,12 @@ export function parseRules(value) {
 	const apps = value !== null && typeof value === "object" ? value.apps : undefined;
 	if (apps === null || typeof apps !== "object" || Array.isArray(apps)) return out;
 	for (const [key, spec] of Object.entries(apps)) {
-		if (typeof spec !== "string" || spec.trim() === "") continue;
+		if (spec !== null && typeof spec !== "string") continue;
 		const ext = normalizeExtension(key);
 		if (ext === "" || ext === "*") continue;
-		out.set(ext, spec.trim());
+		// 空字串＝「這一列保留，但用系統預設」；不要因為值是空的就丟掉，
+		// 否則設定頁一選「用系統預設」那一列就消失，使用者得重新輸入副檔名。
+		out.set(ext, typeof spec === "string" ? spec.trim() : "");
 	}
 	return out;
 }
@@ -214,7 +216,9 @@ export function createStore(configFile) {
 	 */
 	function specFor(path) {
 		const ext = extensionOf(path);
-		return ext === "" ? undefined : load().get(ext);
+		if (ext === "") return undefined;
+		const spec = load().get(ext);
+		return spec === undefined || spec === "" ? undefined : spec;
 	}
 
 	/**
@@ -498,9 +502,8 @@ export function sanitizeApps(value) {
 	if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("apps 必須是物件");
 	const out = {};
 	for (const [key, spec] of Object.entries(value)) {
-		if (typeof spec !== "string") continue;
-		const trimmed = spec.trim();
-		if (trimmed === "") continue;
+		if (spec !== null && typeof spec !== "string") continue;
+		const trimmed = typeof spec === "string" ? spec.trim() : "";
 		if (trimmed.includes("\u0000")) throw new Error("app 值不合法");
 		const ext = normalizeExtension(key);
 		if (ext === "" || ext === "*") continue;

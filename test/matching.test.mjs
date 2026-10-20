@@ -13,6 +13,7 @@ import {
 	matchesApp,
 	normalizeExtension,
 	parseRules,
+	sanitizeApps,
 	uninstall,
 } from "../plugin/index.mjs";
 
@@ -39,14 +40,17 @@ test("parseRules 忽略壞值與萬用字元", () => {
 		apps: {
 			".docx": "/Applications/Pages.app",
 			"*.md": "Obsidian",
+			pdf: "",
 			xlsx: 42,
 			"": "/Applications/Nope.app",
 			"*": "/Applications/Nope.app",
 		},
 	});
+	// 空字串是「保留這一列、但用系統預設」，不能被丟掉。
 	assert.deepEqual(Object.fromEntries(rules), {
 		docx: "/Applications/Pages.app",
 		md: "Obsidian",
+		pdf: "",
 	});
 	assert.deepEqual(Object.fromEntries(parseRules(null)), {});
 	assert.deepEqual(Object.fromEntries(parseRules({ apps: [] })), {});
@@ -91,6 +95,32 @@ test("createStore：mtime 快取、壞 JSON 不拋錯、reorder 把規則 app �
 		writeFileSync(file, "{ not json");
 		assert.equal(store.error() === null, false);
 		assert.equal(store.specFor("/x/a.docx"), "/Applications/LibreOffice.app", "壞檔時保留上一次成功的規則");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("sanitizeApps 保留空字串（系統預設列）並擋掉壞值", () => {
+	assert.deepEqual(sanitizeApps({ docx: "/Applications/Pages.app", pdf: "", pptx: null }), {
+		docx: "/Applications/Pages.app",
+		pdf: "",
+		pptx: "",
+	});
+	assert.deepEqual(sanitizeApps({ DOCX: "  Pages  " }), { docx: "Pages" });
+	assert.throws(() => sanitizeApps([]), /必須是物件/);
+	assert.deepEqual(sanitizeApps({ "*": "X", "": "Y" }), {});
+});
+
+test("規則值為空字串時：specFor 回 undefined、reorder 不動清單", () => {
+	const dir = tempDir();
+	try {
+		const file = join(dir, "open-with.json");
+		writeFileSync(file, JSON.stringify({ apps: { pdf: "" } }));
+		const store = createStore(file);
+		assert.equal(store.specFor("/x/a.pdf"), undefined);
+		const apps = [{ id: "/System/Applications/Preview.app", name: "Preview", default: true }];
+		assert.equal(store.reorder(apps, "/x/a.pdf"), apps);
+		assert.deepEqual(store.rules(), { pdf: "" }, "空字串仍要出現在規則裡，設定頁才留得住那一列");
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

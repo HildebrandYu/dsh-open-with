@@ -204,9 +204,10 @@ window.__ModuleLoader__.load({
 										value: app,
 										disabled: saving,
 										onChange: (event) => {
+											// 選「用系統預設」時保留這一列（值存成空字串），
+											// 不然整列會消失，使用者還得重新輸入副檔名。
 											const next = { ...state.rules };
-											if (event.target.value === "") delete next[ext];
-											else next[ext] = event.target.value;
+											next[ext] = event.target.value;
 											commit(next);
 										},
 									},
