@@ -5,14 +5,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import {
-	applicationMatches,
 	createStore,
 	displayName,
 	extensionOf,
 	install,
-	matchesApp,
 	normalizeExtension,
 	parseRules,
+	sameApp,
 	sanitizeApps,
 	uninstall,
 } from "../plugin/index.mjs";
@@ -56,15 +55,23 @@ test("parseRules 忽略壞值與萬用字元", () => {
 	assert.deepEqual(Object.fromEntries(parseRules({ apps: [] })), {});
 });
 
-test("matchesApp 路徑比 id、名稱不分大小寫", () => {
-	assert.equal(matchesApp({ id: "/Applications/Pages.app", name: "Pages" }, "/Applications/Pages.app"), true);
-	assert.equal(matchesApp({ id: "/Applications/Pages.app", name: "Pages" }, "pages"), true);
-	assert.equal(matchesApp({ id: "/Applications/Pages.app", name: "Pages" }, "/Applications/Other.app"), false);
-	assert.equal(matchesApp({ id: "/Applications/Pages.app", name: "Pages.app" }, "Pages"), true, "顯示名稱帶 .app");
-	assert.equal(matchesApp({ id: "/System/Applications/TextEdit.app", name: "文字編輯.app" }, "TextEdit"), true, "在地化名稱也能比對");
+test("sameApp：路徑比 id、名稱不分大小寫（設定頁與選單共用同一條規則）", () => {
+	assert.equal(sameApp({ id: "/Applications/Pages.app", name: "Pages" }, "/Applications/Pages.app"), true);
+	assert.equal(sameApp({ id: "/Applications/Pages.app", name: "Pages" }, "pages"), true);
+	assert.equal(sameApp({ id: "/Applications/Pages.app", name: "Pages" }, "/Applications/Other.app"), false);
+	assert.equal(sameApp({ id: "/Applications/Pages.app", name: "Pages.app" }, "Pages"), true, "顯示名稱帶 .app");
+	assert.equal(sameApp({ id: "/System/Applications/TextEdit.app", name: "文字編輯.app" }, "TextEdit"), true, "在地化名稱也能比對");
 	assert.equal(displayName("/Applications/Microsoft Word.app"), "Microsoft Word");
-	assert.equal(applicationMatches("/Applications/Pages.app", "Pages"), true);
+	// 選單送回來的是 id 字串（沒有顯示名稱可比）：檔名比對得到，在地化名稱比不到。
+	assert.equal(sameApp("/Applications/Pages.app", "Pages"), true, "選單點回來：檔名");
+	assert.equal(sameApp("/Applications/Pages.app", "/Applications/Pages.app"), true, "選單點回來：路徑");
+	assert.equal(sameApp("/System/Applications/TextEdit.app", "文字編輯"), false, "選單只有 id，在地化名稱是資料限制");
+	// 壞值不拋錯。
+	assert.equal(sameApp(null, "Pages"), false);
+	assert.equal(sameApp({ id: "/Applications/Pages.app" }, ""), false);
+	assert.equal(sameApp({ id: "/Applications/Pages.app" }, null), false);
 });
+
 
 test("createStore：mtime 快取、壞 JSON 不拋錯、reorder 把規則 app 排到第一", () => {
 	const dir = tempDir();
@@ -167,4 +174,37 @@ test("install 改寫三個方法、uninstall 完整還原；無規則時走原�
 
 test("install 對缺少方法的 controller 拋錯（不靜默）", () => {
 	assert.throws(() => install({}, createStore("/nonexistent.json"), null), /openPath/);
+});
+
+test("openFileApplication：選單點回規則指定的 app 時由規則接手（與設定頁同一條 sameApp）", async () => {
+	const opened = [];
+	const handedBack = [];
+	// 假的 store：只驗「接手的判定」，不真的去 launch（那會開一個真的 app）。
+	const store = {
+		specFor: (path) => (path.endsWith(".docx") ? "/Applications/Pages.app" : undefined),
+		open: async (spec, path) => opened.push([spec, path]),
+		reorder: (apps) => apps,
+		rules: () => ({}),
+		error: () => null,
+		last: () => null,
+	};
+	const controller = {
+		openPath: async () => {},
+		fileApplications: async () => [],
+		openFileApplication: async (path, application) => handedBack.push([path, application]),
+	};
+	install(controller, store, null);
+	try {
+		await controller.openFileApplication("/x/a.docx", "/Applications/Pages.app");
+		assert.deepEqual(opened, [["/Applications/Pages.app", "/x/a.docx"]], "規則指定的 app：走規則，不交回原方法");
+		assert.equal(handedBack.length, 0);
+
+		await controller.openFileApplication("/x/a.docx", "/Applications/Other.app");
+		assert.deepEqual(handedBack.at(-1), ["/x/a.docx", "/Applications/Other.app"], "選別的 app：交回原方法");
+
+		await controller.openFileApplication("/x/a.txt", "/Applications/Pages.app");
+		assert.equal(handedBack.length, 2, "沒有規則的副檔名：交回原方法");
+	} finally {
+		uninstall(controller);
+	}
 });

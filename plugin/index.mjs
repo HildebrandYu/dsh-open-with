@@ -113,32 +113,31 @@ export function parseRules(value) {
 }
 
 /**
- * 一個關聯 app 是否符合規則指定的 app。
- * 路徑比對 id；名稱（例如 `Pages`）比對顯示名稱，不分大小寫。
- * @param app - `{ id, name }` 形狀的關聯 app
+ * 一個候選 app 是不是規則指定的那一個 —— **唯一的一條判定規則**。
+ *
+ * 兩個呼叫端問的是同一個問題（「這條規則是不是在講這支 app？」），以前卻各有一支實作，
+ * 而且答案會不一樣：關聯清單有顯示名稱、選單只有 id。合成一支之後：
+ *   - 規則值是路徑（以 `/` 開頭）→ 比 id 全等。
+ *   - 其餘（顯示名稱）→ 先比顯示名稱，再退 id 的檔名（在地化名稱例：`文字編輯.app`）。
+ *
+ * 候選端的欄位由呼叫端決定：關聯清單給 `{id, name}`、選單只給 id 字串。
+ * 字串沒有顯示名稱可比，所以「用在地化名稱寫的規則」在選單那條路上只比得到檔名
+ * （例：規則「文字編輯」＋選單給 `…/TextEdit.app` → 比不到）。這是**資料限制**，
+ * 不是兩套規則；設定頁面存的是路徑，正常操作不會產生這種規則。
+ * @param candidate - `{id, name}` 形狀的關聯 app，或選單送回的 id 字串
  * @param spec - 規則值（絕對路徑或 app 顯示名稱）
- * @returns 是否符合
+ * @returns 是否同一個 app
  */
-export function matchesApp(app, spec) {
-	if (app === null || typeof app !== "object") return false;
-	if (spec.startsWith("/")) return app.id === spec;
-	const target = spec.toLowerCase();
-	const name = typeof app.name === "string" ? app.name.toLowerCase().replace(/\.app$/u, "") : "";
-	const base = basename(String(app.id ?? ""), ".app").toLowerCase();
-	// 顯示名稱可能是在地化名稱（例：TextEdit → 文字編輯.app），所以再比一次 id 的檔名。
-	return name === target || base === target;
-}
-
-/**
- * 使用者從選單送回來的 application id 是否就是規則指定的 app。
- * @param application - 選單送回的 id（通常是 app 路徑）
- * @param spec - 規則值
- * @returns 是否為同一個 app
- */
-export function applicationMatches(application, spec) {
-	if (application === spec) return true;
+export function sameApp(candidate, spec) {
+	if (typeof spec !== "string" || spec === "") return false;
+	const object = candidate !== null && typeof candidate === "object" ? candidate : null;
+	const id = String(object === null ? (candidate ?? "") : (object?.id ?? ""));
+	if (id === spec) return true;
 	if (spec.startsWith("/")) return false;
-	return basename(String(application ?? ""), ".app").toLowerCase() === spec.toLowerCase();
+	const target = spec.toLowerCase();
+	const name = typeof object?.name === "string" ? object.name.toLowerCase().replace(/\.app$/u, "") : "";
+	const base = basename(id, ".app").toLowerCase();
+	return name === target || base === target;
 }
 
 /**
@@ -231,7 +230,7 @@ export function createStore(configFile) {
 		const spec = specFor(path);
 		if (spec === undefined || !Array.isArray(apps)) return apps;
 		const cleared = apps.map((app) => (app?.default === true ? { ...app, default: false } : app));
-		const index = cleared.findIndex((app) => matchesApp(app, spec));
+		const index = cleared.findIndex((app) => sameApp(app, spec));
 		if (index >= 0) {
 			const [hit] = cleared.splice(index, 1);
 			return [{ ...hit, default: true }, ...cleared];
@@ -320,7 +319,7 @@ export function install(controller, store, ctx, configFile = DEFAULT_CONFIG_FILE
 	if (typeof previous.openFileApplication === "function") {
 		controller.openFileApplication = async function openFileApplication(path, application, signal) {
 			const spec = store.specFor(path);
-			if (spec !== undefined && applicationMatches(application, spec)) {
+			if (spec !== undefined && sameApp(application, spec)) {
 				await store.open(spec, path, signal);
 				return;
 			}

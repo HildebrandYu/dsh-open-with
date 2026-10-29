@@ -1,6 +1,6 @@
 {
   "name": "dsh-open-with",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "DSH 專用的「副檔名 → 開啟 app」規則：只在 DSH 內開啟檔案時使用指定 app，不改 macOS 系統預設；附設定頁。",
   "type": "module",
   "main": "./plugin/index.mjs",
